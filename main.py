@@ -4,7 +4,6 @@ import time
 from datetime import datetime
 
 import requests
-from bs4 import BeautifulSoup
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -36,22 +35,28 @@ def get_rate():
 
     response.raise_for_status()
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    text = response.text
 
-    text = soup.get_text(" ", strip=True)
+    patterns = [
+        r"EUR[^0-9]*([0-9]+[.,][0-9]+)",
+        r"€[^0-9]*([0-9]+[.,][0-9]+)",
+        r'"EUR".*?([0-9]+[.,][0-9]+)',
+    ]
 
-    print(text)
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
 
-    match = re.search(r"EUR[^0-9]*([0-9]+[,.][0-9]+)", text)
+        if match:
+            value = match.group(1).replace(",", ".")
+            return float(value)
 
-    if not match:
-        raise Exception("EUR rate not found")
+    with open("debug.html", "w", encoding="utf-8") as f:
+        f.write(text)
 
-    return float(match.group(1).replace(",", "."))
+    raise Exception("EUR rate not found")
 
 
 send_telegram("✅ Pegas EUR bot started")
-
 
 while True:
     try:
