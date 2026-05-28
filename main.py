@@ -8,8 +8,7 @@ import requests
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-URL = "https://agency.pegast.ru/bill_payment"
-CHECK_SECONDS = 300
+URL = "https://agency.pegast.ru/ExchangeRates"
 
 last_rate = None
 
@@ -17,22 +16,25 @@ last_rate = None
 def send_telegram(text):
     requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-        json={"chat_id": CHAT_ID, "text": text},
+        json={
+            "chat_id": CHAT_ID,
+            "text": text
+        },
         timeout=20
     )
 
 
 def get_rate():
-    response = requests.get(
-        URL,
-        headers={"User-Agent": "Mozilla/5.0"},
-        timeout=30
-    )
-    response.raise_for_status()
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+
+    response = requests.get(URL, headers=headers, timeout=30)
 
     text = response.text
 
-    match = re.search(r"EUR\s*=\s*([0-9]+[,.][0-9]+)", text)
+    # ищем EUR и число рядом
+    match = re.search(r"EUR.*?(\d+[.,]\d+)", text, re.S)
 
     if not match:
         raise Exception("EUR rate not found")
@@ -48,10 +50,11 @@ while True:
 
         if last_rate is None:
             last_rate = current_rate
-            send_telegram(f"📌 Current EUR Pegas: {current_rate}")
+            send_telegram(f"💶 Current EUR: {current_rate}")
 
         elif current_rate != last_rate:
-            direction = "⬆️" if current_rate > last_rate else "⬇️"
+
+            direction = "📈" if current_rate > last_rate else "📉"
 
             send_telegram(
                 f"{direction} EUR changed on Pegas\n\n"
@@ -64,4 +67,4 @@ while True:
     except Exception as e:
         send_telegram(f"⚠️ Error: {e}")
 
-    time.sleep(CHECK_SECONDS)
+    time.sleep(300)
