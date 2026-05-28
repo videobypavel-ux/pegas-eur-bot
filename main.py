@@ -10,6 +10,9 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 URL = "https://agency.pegast.ru/ExchangeRates"
 
+# Сумма доплаты за тур в евро
+TOUR_EUR = 1952.25
+
 last_rate = None
 
 
@@ -25,15 +28,18 @@ def send_telegram(text):
 
 
 def get_rate():
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    response = requests.get(
+        URL,
+        headers={
+            "User-Agent": "Mozilla/5.0"
+        },
+        timeout=30
+    )
 
-    response = requests.get(URL, headers=headers, timeout=30)
+    response.raise_for_status()
 
     text = response.text
 
-    # ищем EUR и число рядом
     match = re.search(r"EUR.*?(\d+[.,]\d+)", text, re.S)
 
     if not match:
@@ -42,29 +48,41 @@ def get_rate():
     return float(match.group(1).replace(",", "."))
 
 
-send_telegram("✅ Pegas EUR bot started")
+send_telegram("✅ Мониторинг Pegas запущен")
 
 while True:
     try:
         current_rate = get_rate()
+        current_rub = round(current_rate * TOUR_EUR)
 
         if last_rate is None:
             last_rate = current_rate
-            send_telegram(f"💶 Current EUR: {current_rate}")
+
+            send_telegram(
+                f"💶 Курс EUR Pegas: {current_rate:.2f}\n\n"
+                f"💰 Доплата {TOUR_EUR} EUR:\n"
+                f"{current_rub:,} ₽".replace(",", " ")
+            )
 
         elif current_rate != last_rate:
 
-            direction = "📈" if current_rate > last_rate else "📉"
+            old_rub = round(last_rate * TOUR_EUR)
+            diff = current_rub - old_rub
+
+            direction = "📈" if diff > 0 else "📉"
 
             send_telegram(
-                f"{direction} EUR changed on Pegas\n\n"
-                f"{last_rate} → {current_rate}\n"
-                f"{datetime.now().strftime('%d.%m %H:%M')}"
+                f"{direction} Изменился курс EUR Pegas\n\n"
+                f"Старый курс: {last_rate:.2f}\n"
+                f"Новый курс: {current_rate:.2f}\n\n"
+                f"💰 Доплата за тур:\n"
+                f"{current_rub:,} ₽\n\n"
+                f"Изменение: {diff:+,} ₽".replace(",", " ")
             )
 
             last_rate = current_rate
 
     except Exception as e:
-        send_telegram(f"⚠️ Error: {e}")
+        send_telegram(f"⚠️ Ошибка: {e}")
 
     time.sleep(300)
