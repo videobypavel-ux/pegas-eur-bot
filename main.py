@@ -28,13 +28,21 @@ def send_telegram(text):
 def get_rate():
     response = requests.get(
         URL,
-        headers={"User-Agent": "Mozilla/5.0"},
+        headers={
+            "User-Agent": "Mozilla/5.0"
+        },
         timeout=30
     )
 
-    text = BeautifulSoup(response.text, "html.parser").get_text(" ")
+    response.raise_for_status()
 
-    match = re.search(r"EUR\s*=\s*([0-9]+[,.][0-9]+)", text)
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    text = soup.get_text(" ", strip=True)
+
+    print(text)
+
+    match = re.search(r"EUR[^0-9]*([0-9]+[,.][0-9]+)", text)
 
     if not match:
         raise Exception("EUR rate not found")
@@ -44,13 +52,17 @@ def get_rate():
 
 send_telegram("✅ Pegas EUR bot started")
 
+
 while True:
     try:
         current_rate = get_rate()
 
         if last_rate is None:
             last_rate = current_rate
-            send_telegram(f"📌 Current EUR: {current_rate}")
+
+            send_telegram(
+                f"📌 Current EUR Pegas: {current_rate}"
+            )
 
         elif current_rate != last_rate:
 
