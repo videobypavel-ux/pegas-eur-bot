@@ -4,12 +4,12 @@ import time
 from datetime import datetime
 
 import requests
-from bs4 import BeautifulSoup
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-URL = "https://agency.pegast.ru/ExchangeRates"
+URL = "https://agency.pegast.ru/bill_payment"
+CHECK_SECONDS = 300
 
 last_rate = None
 
@@ -17,10 +17,7 @@ last_rate = None
 def send_telegram(text):
     requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-        json={
-            "chat_id": CHAT_ID,
-            "text": text
-        },
+        json={"chat_id": CHAT_ID, "text": text},
         timeout=20
     )
 
@@ -28,39 +25,22 @@ def send_telegram(text):
 def get_rate():
     response = requests.get(
         URL,
-        headers={
-            "User-Agent": "Mozilla/5.0",
-            "Accept-Language": "ru"
-        },
+        headers={"User-Agent": "Mozilla/5.0"},
         timeout=30
     )
-
     response.raise_for_status()
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    text = response.text
 
-    text = soup.get_text(" ", strip=True)
+    match = re.search(r"EUR\s*=\s*([0-9]+[,.][0-9]+)", text)
 
-    print(text)
+    if not match:
+        raise Exception("EUR rate not found")
 
-    eur_patterns = [
-        r"EUR\s*[:=]?\s*([0-9]+[.,][0-9]+)",
-        r"ЕВРО\s*[:=]?\s*([0-9]+[.,][0-9]+)",
-        r"€\s*([0-9]+[.,][0-9]+)",
-    ]
-
-    for pattern in eur_patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-
-        if match:
-            value = match.group(1).replace(",", ".")
-            return float(value)
-
-    raise Exception("EUR rate not found")
+    return float(match.group(1).replace(",", "."))
 
 
 send_telegram("✅ Pegas EUR bot started")
-
 
 while True:
     try:
@@ -68,13 +48,9 @@ while True:
 
         if last_rate is None:
             last_rate = current_rate
-
-            send_telegram(
-                f"📌 Current EUR Pegas: {current_rate}"
-            )
+            send_telegram(f"📌 Current EUR Pegas: {current_rate}")
 
         elif current_rate != last_rate:
-
             direction = "⬆️" if current_rate > last_rate else "⬇️"
 
             send_telegram(
@@ -88,4 +64,4 @@ while True:
     except Exception as e:
         send_telegram(f"⚠️ Error: {e}")
 
-    time.sleep(300)
+    time.sleep(CHECK_SECONDS)
